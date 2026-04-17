@@ -3,7 +3,8 @@ import { MongoClient } from "mongodb";
 
 dotenv.config();
 
-const mongoUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017";
+const mongoUri =
+  "mongodb://neeraj_b_75:neeraj75b01@ac-rdsxrfq-shard-00-00.u83hxlc.mongodb.net:27017,ac-rdsxrfq-shard-00-01.u83hxlc.mongodb.net:27017,ac-rdsxrfq-shard-00-02.u83hxlc.mongodb.net:27017/?authSource=admin&replicaSet=atlas-f5hmly-shard-0&tls=true&retryWrites=true&w=majority&appName=Cluster0";
 const dbName = process.env.MONGODB_DB || "appointment_booking";
 
 let client;
