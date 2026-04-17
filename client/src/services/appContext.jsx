@@ -130,35 +130,39 @@ export function AppProvider({ children }) {
 
   // ✅ FIXED REGISTER FUNCTION
   async function register() {
-    setLoading(true);
-    setMessage("");
+  setLoading(true);
+  setMessage("");
 
-    try {
-      const data = await api("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({
-          name: loginForm.name,
-          phone: loginForm.phone,
-          email: loginForm.email,
-          password: loginForm.password,
-          role: loginForm.role
-        })
-      });
+  try {
+    const endpoint =
+      loginForm.role === "admin"
+        ? "/auth/register/admin"
+        : "/auth/register/customer";
 
-      setSession(data);
-      setAuthMode("login");
-      await loadDashboard(data.user);
-      setMessage(data.message || "Account created successfully!");
-      return data;
+    const data = await api(endpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        name: loginForm.name,
+        phone: loginForm.phone,
+        email: loginForm.email,
+        password: loginForm.password
+      })
+    });
 
-    } catch (error) {
-      setMessage(error.message || "Unable to create customer account.");
-      throw error;
+    setSession(data);
+    setAuthMode("login");
+    await loadDashboard(data.user);
+    setMessage(data.message || "Account created successfully!");
+    return data;
 
-    } finally {
-      setLoading(false);
-    }
+  } catch (error) {
+    setMessage(error.message || "Unable to create customer account.");
+    throw error;
+
+  } finally {
+    setLoading(false);
   }
+}
 
   function logout() {
     setSession(null);
