@@ -42,10 +42,8 @@ export function AppProvider({ children }) {
       loadDashboard(session.user);
       loadConversations(session.user);
       const intervalId = window.setInterval(() => loadConversations(session.user), 12000);
-
       return () => window.clearInterval(intervalId);
     }
-
     setConversations([]);
     return undefined;
   }, [session]);
@@ -63,20 +61,16 @@ export function AppProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!selectedService || providers.length === 0) {
-      return;
-    }
+    if (!selectedService || providers.length === 0) return;
 
     const matchingProviders = providers.filter((provider) => provider.serviceIds.includes(selectedService));
-    if (matchingProviders.length > 0 && !matchingProviders.some((provider) => provider.id === selectedProvider)) {
+    if (matchingProviders.length > 0 && !matchingProviders.some((p) => p.id === selectedProvider)) {
       setSelectedProvider(matchingProviders[0].id);
     }
   }, [selectedService, providers, selectedProvider]);
 
   useEffect(() => {
-    if (!selectedDate) {
-      return;
-    }
+    if (!selectedDate) return;
 
     const params = new URLSearchParams({
       date: selectedDate,
@@ -93,14 +87,12 @@ export function AppProvider({ children }) {
       return;
     }
 
-    api(`/appointments/recommendations?customerId=${session.user.id}&date=${selectedDate}&serviceId=${selectedService}`).then(setRecommendations);
+    api(`/appointments/recommendations?customerId=${session.user.id}&date=${selectedDate}&serviceId=${selectedService}`)
+      .then(setRecommendations);
   }, [session, selectedDate, selectedService]);
 
   async function loadDashboard(user = session?.user) {
-    if (!user) {
-      return;
-    }
-
+    if (!user) return;
     const data = await api(`/appointments/dashboard?role=${user.role}&userId=${user.id}`);
     setDashboard(data);
   }
@@ -110,7 +102,6 @@ export function AppProvider({ children }) {
       setConversations([]);
       return [];
     }
-
     const data = await api(`/chat?role=${user.role}&userId=${user.id}`);
     setConversations(data);
     return data;
@@ -137,29 +128,33 @@ export function AppProvider({ children }) {
     }
   }
 
+  // ✅ FIXED REGISTER FUNCTION
   async function register() {
     setLoading(true);
     setMessage("");
 
     try {
-      const endpoint = loginForm.role === "admin" ? "/auth/register/admin" : "/auth/register/customer";
-      const data = await api(endpoint, {
+      const data = await api("/auth/register", {
         method: "POST",
         body: JSON.stringify({
           name: loginForm.name,
           phone: loginForm.phone,
           email: loginForm.email,
-          password: loginForm.password
+          password: loginForm.password,
+          role: loginForm.role
         })
       });
+
       setSession(data);
       setAuthMode("login");
       await loadDashboard(data.user);
-      setMessage(data.message);
+      setMessage(data.message || "Account created successfully!");
       return data;
+
     } catch (error) {
-      setMessage(error.message);
+      setMessage(error.message || "Unable to create customer account.");
       throw error;
+
     } finally {
       setLoading(false);
     }
@@ -182,9 +177,9 @@ export function AppProvider({ children }) {
     setSchedule(data.slots);
   }
 
-  async function createBooking(slot = activeSlot, paymentInput = {}) {
+  async function createBooking(slot = activeSlot) {
     if (!session || session.user.role !== "customer") {
-      throw new Error("Customer login is required to book an appointment.");
+      throw new Error("Customer login is required.");
     }
 
     setLoading(true);
@@ -203,195 +198,46 @@ export function AppProvider({ children }) {
       });
 
       setMessage(data.message);
-      setBookingNote("");
-      setActiveSlot(null);
       await loadDashboard();
       await refreshSchedule(slot.providerId);
       return data;
-    } catch (error) {
-      setMessage(error.message);
-      throw error;
     } finally {
       setLoading(false);
     }
   }
 
-  async function cancelBooking(appointmentId, cancellationReason) {
-    const data = await api(`/appointments/${appointmentId}/cancel`, {
-      method: "PATCH",
-      body: JSON.stringify({ cancellationReason })
-    });
-    setMessage(data.message);
-    setRecommendations(data.alternativeSlots || []);
-    await loadDashboard();
-    await refreshSchedule();
-    return data;
-  }
-
-  async function rescheduleBooking(appointmentId, slot) {
-    const data = await api(`/appointments/${appointmentId}/reschedule`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        providerId: slot.providerId,
-        date: slot.date,
-        startTime: slot.startTime,
-        priority: bookingPriority
-      })
-    });
-
-    setMessage(data.message);
-    await loadDashboard();
-    await refreshSchedule(slot.providerId);
-    return data;
-  }
-
-  async function joinWaitlist() {
-    if (!session || session.user.role !== "customer") {
-      throw new Error("Customer login is required to join the waitlist.");
-    }
-
-    const data = await api("/appointments/waitlist", {
-      method: "POST",
-      body: JSON.stringify({
-        customerId: session.user.id,
-        providerId: selectedProvider,
-        serviceId: selectedService,
-        date: selectedDate,
-        preferredTimes: recommendations.map((item) => item.startTime).slice(0, 2),
-        priority: bookingPriority
-      })
-    });
-
-    setMessage(data.message);
-    await loadDashboard();
-    return data;
-  }
-
-  async function approveBooking(appointmentId) {
-    if (!session || session.user.role !== "admin") {
-      throw new Error("Admin login is required.");
-    }
-
-    const data = await api(`/appointments/${appointmentId}/approve`, {
-      method: "PATCH",
-      body: JSON.stringify({ adminId: session.user.id })
-    });
-    setMessage(data.message);
-    await loadDashboard();
-    await refreshSchedule();
-    return data;
-  }
-
-  async function deleteBooking(appointmentId) {
-    if (!session?.user) {
-      throw new Error("Sign in is required to delete an appointment.");
-    }
-
-    const data = await api(`/appointments/${appointmentId}`, {
-      method: "DELETE",
-      body: JSON.stringify({
-        userId: session.user.id,
-        role: session.user.role
-      })
-    });
-
-    setMessage(data.message);
-    await loadDashboard();
-    await refreshSchedule();
-    return data;
-  }
-
-  async function sendChatMessage(providerId, text) {
-    if (!session?.user) {
-      throw new Error("Sign in is required to chat with specialists.");
-    }
-
-    setLoading(true);
-
-    try {
-      const data = await api("/chat/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          role: session.user.role,
-          userId: session.user.id,
-          providerId,
-          text
-        })
-      });
-
-      setMessage(data.message);
-      await loadConversations();
-      return data.conversation;
-    } catch (error) {
-      setMessage(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const value = useMemo(
-    () => ({
-      session,
-      setSession,
-      authMode,
-      setAuthMode,
-      loginForm,
-      setLoginForm,
-      services,
-      providers,
-      dashboard,
-      selectedService,
-      setSelectedService,
-      selectedProvider,
-      setSelectedProvider,
-      selectedDate,
-      setSelectedDate,
-      schedule,
-      recommendations,
-      conversations,
-      bookingPriority,
-      setBookingPriority,
-      bookingNote,
-      setBookingNote,
-      activeSlot,
-      setActiveSlot,
-      message,
-      setMessage,
-      loading,
-      loadDashboard,
-      loadConversations,
-      login,
-      register,
-      logout,
-      createBooking,
-      cancelBooking,
-      rescheduleBooking,
-      joinWaitlist,
-      approveBooking,
-      deleteBooking,
-      sendChatMessage
-    }),
-    [
-      session,
-      authMode,
-      loginForm,
-      services,
-      providers,
-      dashboard,
-      selectedService,
-      selectedProvider,
-      selectedDate,
-      schedule,
-      recommendations,
-      conversations,
-      bookingPriority,
-      bookingNote,
-      activeSlot,
-      message,
-      loading
-    ]
-  );
+  const value = useMemo(() => ({
+    session,
+    authMode,
+    setAuthMode,
+    loginForm,
+    setLoginForm,
+    services,
+    providers,
+    dashboard,
+    selectedService,
+    setSelectedService,
+    selectedProvider,
+    setSelectedProvider,
+    selectedDate,
+    setSelectedDate,
+    schedule,
+    recommendations,
+    conversations,
+    bookingPriority,
+    setBookingPriority,
+    bookingNote,
+    setBookingNote,
+    activeSlot,
+    setActiveSlot,
+    message,
+    setMessage,
+    loading,
+    login,
+    register,
+    logout,
+    createBooking
+  }), [session, authMode, loginForm, services, providers, dashboard, selectedService, selectedProvider, selectedDate, schedule, recommendations, conversations, bookingPriority, bookingNote, activeSlot, message, loading]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
